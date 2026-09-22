@@ -48,6 +48,10 @@
  * Include files
  */
 #include "hpl.h"
+#include <stdlib.h>
+/* hpl-2.3-omp: HPL_CHUNK = number of NB-wide column slices updated between two broadcast polls (stock: 1) */
+static int HPL_chunk_mult( void )
+{ static int c = 0; if( c == 0 ) { const char * e = getenv( "HPL_CHUNK" ); c = ( e ? atoi( e ) : 1 ); if( c < 1 ) c = 1; } return c; }
 
 #ifdef STDC_HEADERS
 void HPL_pdupdateTN
@@ -169,7 +173,7 @@ void HPL_pdupdateTN
  */
       while ( test == HPL_KEEP_TESTING )
       {
-         nn = n - nq0; nn = Mmin( nb, nn );
+         nn = n - nq0; nn = Mmin( nb * HPL_chunk_mult(), nn );
 /*
  * Update nb columns at a time
  */
@@ -299,7 +303,7 @@ void HPL_pdupdateTN
  */
       while ( test == HPL_KEEP_TESTING )
       {
-         nn = n - nq0; nn = Mmin( nb, nn );
+         nn = n - nq0; nn = Mmin( nb * HPL_chunk_mult(), nn );
 
          HPL_dtrsm( HplColumnMajor, HplLeft,  HplUpper, HplTrans,
                     HplUnit, jb, nn, HPL_rone, L1ptr, jb, Uptr, LDU );

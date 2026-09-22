@@ -48,6 +48,11 @@
  * Include files
  */
 #include "hpl.h"
+#include <stdlib.h>
+#include "pdupdateTT_pipe.inc"
+/* hpl-2.3-omp: HPL_CHUNK = number of NB-wide column slices updated between two broadcast polls (stock: 1) */
+static int HPL_chunk_mult( void )
+{ static int c = 0; if( c == 0 ) { const char * e = getenv( "HPL_CHUNK" ); c = ( e ? atoi( e ) : 1 ); if( c < 1 ) c = 1; } return c; }
 
 #ifdef STDC_HEADERS
 void HPL_pdupdateTT
@@ -169,7 +174,7 @@ void HPL_pdupdateTT
  */
       while ( test == HPL_KEEP_TESTING )
       {
-         nn = n - nq0; nn = Mmin( nb, nn );
+         nn = n - nq0; nn = Mmin( nb * HPL_chunk_mult(), nn );
 /*
  * Update nb columns at a time
  */
@@ -264,6 +269,11 @@ void HPL_pdupdateTT
       if( fswap == HPL_NO_SWP )
       { fswap = PANEL->algo->fswap; tswap = PANEL->algo->fsthr; }
 
+#ifdef _OPENMP
+      if( ( HPL_pipe_slices() > 1 ) && ( n >= 2 * nb * HPL_pipe_slices() ) &&
+          ( ( fswap == HPL_SWAP01 ) || ( ( fswap == HPL_SW_MIX ) && ( n > tswap ) ) ) )
+      { HPL_pdupdateTT_pipe( PBCST, &test, PANEL, n ); goto pipe_done; }
+#endif
       if( (   fswap == HPL_SWAP01 ) ||
           ( ( fswap == HPL_SW_MIX ) && ( n > tswap ) ) )
       { HPL_pdlaswp01T( PBCST, &test, PANEL, n ); }
@@ -299,7 +309,7 @@ void HPL_pdupdateTT
  */
       while ( test == HPL_KEEP_TESTING )
       {
-         nn = n - nq0; nn = Mmin( nb, nn );
+         nn = n - nq0; nn = Mmin( nb * HPL_chunk_mult(), nn );
 
          HPL_dtrsm( HplColumnMajor, HplRight, HplUpper, HplNoTrans,
                     HplUnit, nn, jb, HPL_rone, L1ptr, jb, Uptr, LDU );
@@ -428,6 +438,9 @@ void HPL_pdupdateTT
 #endif
    }
 
+#ifdef _OPENMP
+pipe_done:
+#endif
    PANEL->A = Mptr( PANEL->A, 0, n, lda ); PANEL->nq -= n; PANEL->jj += n;
 /*
  * return the outcome of the probe  (should always be  HPL_SUCCESS,  the

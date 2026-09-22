@@ -57,7 +57,7 @@
 #endif
 
 #ifdef STDC_HEADERS
-void HPL_dlaswp10N
+void HPL_dlaswp10N_ser
 (
    const int                        M,
    const int                        N,
@@ -66,7 +66,7 @@ void HPL_dlaswp10N
    const int *                      IPIV
 )
 #else
-void HPL_dlaswp10N
+void HPL_dlaswp10N_ser
 ( M, N, A, LDA, IPIV )
    const int                        M;
    const int                        N;
@@ -183,4 +183,30 @@ void HPL_dlaswp10N
 /*
  * End of HPL_dlaswp10N
  */
+}
+
+/* --- hpl-2.3-omp: column-block OpenMP wrapper around the stock kernel (HPL_dlaswp10N_ser) --- */
+#ifdef _OPENMP
+#include <omp.h>
+#endif
+void HPL_dlaswp10N
+(
+   const int M, const int N, double * A, const int LDA, const int * IPIV
+)
+{
+#ifdef _OPENMP
+   int nthr = omp_get_max_threads();
+   if( nthr > 1 && M >= 2 * nthr && (long)M * (long)N >= 65536L )
+   {
+#pragma omp parallel
+      {
+         int t = omp_get_thread_num(), nt = omp_get_num_threads();
+         int chunk = ( M + nt - 1 ) / nt, j0 = t * chunk;
+         int nj = ( j0 + chunk <= M ) ? chunk : M - j0;
+         if( nj > 0 ) { HPL_dlaswp10N_ser( nj, N, A + j0, LDA, IPIV ); }
+      }
+      return;
+   }
+#endif
+   HPL_dlaswp10N_ser( M, N, A, LDA, IPIV );
 }
